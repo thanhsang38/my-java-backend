@@ -22,4 +22,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = :roleName")
     // THAY ĐỔI: Thêm Pageable và trả về Page<User>
     Page<User> findByRole(@Param("roleName") ERole roleName, Pageable pageable);
+
+    Optional<User> findByPhone(String phone);
+
+    // Tìm người dùng theo số điện thoại VÀ ID KHÁC (cho hàm update)
+    Optional<User> findByPhoneAndIdNot(String phone, Long id);
 }

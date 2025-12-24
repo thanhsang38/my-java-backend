@@ -3,6 +3,7 @@ package com.tranthanhsang.example304.security.services;
 import com.tranthanhsang.example304.entity.Product;
 import com.tranthanhsang.example304.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -25,12 +26,42 @@ public class ProductService {
 
     // Lấy tất cả Product
     public Page<Product> getAllPaged(int page) {
-        Pageable pageable = PageRequest.of(page, 12); // 👈 10 sản phẩm mỗi trang
+        Pageable pageable = PageRequest.of(page, 12, Sort.by("id").descending()); // 👈 10 sản phẩm mỗi trang
         return productRepository.findAll(pageable);
+    }
+
+    private void validateProductFields(Product product, boolean isCreation) {
+        if (product.getName() == null || product.getName().trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Tên sản phẩm không được để trống.");
+        }
+        if (product.getDescription() == null || product.getDescription().trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Mô tả sản phẩm không được để trống.");
+        }
+        if (product.getPrice() == null || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("❌ Lỗi: Giá sản phẩm không hợp lệ.");
+        }
+        if (product.getCategory() == null || product.getCategory().getId() == null) {
+            throw new RuntimeException("❌ Lỗi: Phải chọn danh mục cho sản phẩm.");
+        }
+        if (isCreation && (product.getImageUrl() == null || product.getImageUrl().trim().isEmpty())) {
+            // Ràng buộc ảnh chỉ áp dụng khi THÊM MỚI
+            throw new RuntimeException("❌ Lỗi: Sản phẩm mới phải có ảnh đại diện.");
+        }
     }
 
     // Tạo mới Product
     public Product create(Product product) {
+        // ✅ BƯỚC 1: RÀNG BUỘC KHÔNG ĐƯỢC TRỐNG
+        validateProductFields(product, true);
+
+        // ✅ BƯỚC 2: RÀNG BUỘC TÊN DUY NHẤT
+        productRepository.findByNameIgnoreCase(product.getName())
+                .ifPresent(p -> {
+                    throw new RuntimeException("❌ Lỗi: Tên sản phẩm '" + product.getName() + "' đã tồn tại.");
+                });
+
+        product.setCreatedAt(LocalDateTime.now());
+        product.setUpdatedAt(LocalDateTime.now());
         return productRepository.save(product);
     }
 
@@ -39,6 +70,15 @@ public class ProductService {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm có id: " + id));
 
+        // ✅ BƯỚC 1: RÀNG BUỘC KHÔNG ĐƯỢC TRỐNG
+        validateProductFields(product, false); // Không kiểm tra ảnh (Image) ở đây
+
+        // ✅ BƯỚC 2: RÀNG BUỘC TÊN DUY NHẤT (Bỏ qua ID hiện tại)
+        productRepository.findByNameIgnoreCaseAndIdNot(product.getName(), id)
+                .ifPresent(p -> {
+                    throw new RuntimeException(
+                            "❌ Lỗi: Tên sản phẩm '" + product.getName() + "' đã được sử dụng bởi sản phẩm khác.");
+                });
         // ✅ Nếu ảnh mới khác ảnh cũ → xóa ảnh cũ
         if (product.getImageUrl() != null &&
                 existing.getImageUrl() != null &&
@@ -63,12 +103,22 @@ public class ProductService {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm có id: " + id));
 
-        // ✅ Xóa ảnh nếu có
-        if (existing.getImageUrl() != null) {
-            fileUploadService.deleteImage(existing.getImageUrl());
-        }
+        String imagePath = existing.getImageUrl();
 
-        productRepository.deleteById(id);
+        try {
+            // 🟢 Thử xóa sản phẩm trong DB
+            productRepository.deleteById(id);
+            productRepository.flush(); // ép Hibernate thực thi SQL ngay
+
+            // 🟢 Xóa thành công → giờ mới xóa ảnh
+            if (imagePath != null) {
+                fileUploadService.deleteImage(imagePath);
+            }
+
+        } catch (DataIntegrityViolationException ex) {
+            // 🔴 Lỗi khóa ngoại → Không xóa được → KHÔNG được xóa ảnh
+            throw new RuntimeException("Sản phẩm đang được sử dụng, không thể xóa.");
+        }
     }
 
     // Lấy sản phẩm theo ID

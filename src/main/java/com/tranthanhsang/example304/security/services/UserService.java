@@ -67,16 +67,42 @@ public class UserService {
         }
 
         if (userUpdate.getUsername() != null && !userUpdate.getUsername().equals(user.getUsername())) {
-            if (userRepository.existsByUsername(userUpdate.getUsername())) {
+            validateNameField(userUpdate.getUsername(), "Username");
+            if (userRepository.existsByUsername(userUpdate.getUsername().trim())) {
                 throw new RuntimeException("Username '" + userUpdate.getUsername() + "' đã tồn tại!");
             }
-            user.setUsername(userUpdate.getUsername()); // Cập nhật username mới
+            user.setUsername(userUpdate.getUsername().trim());
+        }
+        if (userUpdate.getFullName() != null) {
+            validateNameField(userUpdate.getFullName(), "Họ và tên");
+            user.setFullName(userUpdate.getFullName().trim());
+        }
+        if (userUpdate.getEmail() != null) {
+            String newEmail = userUpdate.getEmail().trim(); // Dọn dẹp khoảng trắng
+            validateNameField(newEmail, "Email"); // Kiểm tra rỗng
+
+            if (!newEmail.equals(user.getEmail())) {
+                if (userRepository.existsByEmail(newEmail)) {
+                    throw new RuntimeException("Email '" + newEmail + "' đã tồn tại!");
+                }
+                user.setEmail(newEmail); // Cập nhật email đã dọn dẹp
+            }
+        }
+        if (userUpdate.getPhone() != null) {
+            String newPhone = userUpdate.getPhone().trim();
+            validatePhoneNumber(newPhone);
+
+            if (!newPhone.equals(user.getPhone())) {
+                userRepository.findByPhoneAndIdNot(newPhone, user.getId())
+                        .ifPresent(u -> {
+                            throw new RuntimeException("❌ Lỗi: Số điện thoại '" + newPhone + "' đã được sử dụng!");
+                        });
+                user.setPhone(newPhone);
+            }
         }
         // Cập nhật thông tin
-        user.setFullName(userUpdate.getFullName());
-        user.setPhone(userUpdate.getPhone());
+
         user.setImageUrl(newImageUrl);
-        user.setEmail(userUpdate.getEmail());
 
         // Nếu có mật khẩu mới
         if (userUpdate.getPassword() != null && !userUpdate.getPassword().isBlank()) {
@@ -114,20 +140,26 @@ public class UserService {
     }
 
     public User registerNewUser(SignupRequest signUpRequest) {
-
+        validateNameField(signUpRequest.getUsername(), "Username");
+        validateNameField(signUpRequest.getFullName(), "Họ và tên");
+        validateNameField(signUpRequest.getEmail(), "Email");
         if (userRepository.existsByUsername(signUpRequest.getUsername())) {
             throw new RuntimeException("Username đã tồn tại");
         }
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
             throw new RuntimeException("Email đã tồn tại");
         }
-
+        validatePhoneNumber(signUpRequest.getPhone());
+        String phone = signUpRequest.getPhone().trim();
+        if (userRepository.findByPhone(phone).isPresent()) {
+            throw new RuntimeException("❌ Lỗi: Số điện thoại '" + phone + "' đã tồn tại!");
+        }
         User user = new User();
-        user.setUsername(signUpRequest.getUsername());
-        user.setEmail(signUpRequest.getEmail());
+        user.setUsername(signUpRequest.getUsername().trim());
+        user.setEmail(signUpRequest.getEmail().trim());
         user.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
-        user.setFullName(signUpRequest.getFullName());
-        user.setPhone(signUpRequest.getPhone());
+        user.setFullName(signUpRequest.getFullName().trim());
+        user.setPhone(phone);
         user.setImageUrl(signUpRequest.getImageUrl());
         user.setIsActive(true);
         user.setCreatedAt(LocalDateTime.now());
@@ -149,5 +181,28 @@ public class UserService {
 
         user.setRoles(roles);
         return userRepository.save(user);
+    }
+
+    private void validatePhoneNumber(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Số điện thoại không được để trống.");
+        }
+        String cleanedPhone = phone.trim();
+
+        // RÀNG BUỘC 1: KIỂM TRA ĐỊNH DẠNG (CHỈ CHẤP NHẬN SỐ)
+        if (!cleanedPhone.matches("\\d+")) {
+            throw new RuntimeException("❌ Lỗi: Số điện thoại chỉ được chứa các ký tự số.");
+        }
+
+        // RÀNG BUỘC 2: KIỂM TRA ĐỘ DÀI (GIỚI HẠN 10 CHỮ SỐ)
+        if (cleanedPhone.length() != 10) {
+            throw new RuntimeException("❌ Lỗi: Số điện thoại phải có đúng 10 chữ số.");
+        }
+    }
+
+    private void validateNameField(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Trường '" + fieldName + "' không được để trống.");
+        }
     }
 }

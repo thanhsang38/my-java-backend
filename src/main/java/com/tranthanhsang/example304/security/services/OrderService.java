@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,15 +19,18 @@ import com.tranthanhsang.example304.entity.Product;
 import com.tranthanhsang.example304.entity.Promotion;
 import com.tranthanhsang.example304.entity.enums.OrderStatus;
 import com.tranthanhsang.example304.model.User;
+import com.tranthanhsang.example304.payload.response.EmployeeSalesDTO;
 import com.tranthanhsang.example304.payload.response.OrderDTO;
 import com.tranthanhsang.example304.payload.response.OrderItemDTO;
+import com.tranthanhsang.example304.payload.response.ProductSalesDTO;
+import com.tranthanhsang.example304.payload.response.RevenueCountDTO;
 import com.tranthanhsang.example304.repository.OrderRepository;
 import com.tranthanhsang.example304.repository.PromotionRepository;
 import com.tranthanhsang.example304.repository.TableRepository;
 import com.tranthanhsang.example304.repository.UserRepository;
 import com.tranthanhsang.example304.repository.ProductRepository;
 import com.tranthanhsang.example304.entity.TableEntity;
-import com.tranthanhsang.example304.repository.UserRepository;
+
 import java.util.function.Function;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -540,5 +543,29 @@ public class OrderService {
 
         // 2. Chuyển đổi sang DTO và trả về
         return convertToDTO(order);
+    }
+
+    public List<ProductSalesDTO> getTopSellingProducts(int limit) {
+        // 1. Tạo Pageable với giới hạn (Limit)
+        // Pageable ở đây chỉ dùng để giới hạn số lượng trả về (Limit)
+        Pageable pageable = PageRequest.of(0, limit);
+
+        // 2. Gọi hàm Repository với truy vấn JPQL (đã có @Query)
+        return orderRepo.findTopSellingProducts(pageable);
+    }
+
+    public List<RevenueCountDTO> getDailyRevenueAndOrderCount(int days) {
+        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+        return orderRepo.findDailyPaidOrderStats(startDate);
+    }
+
+    public List<ProductSalesDTO> getRevenueByCategoryStats() {
+        // Gọi hàm Repository mới với truy vấn JPQL
+        return orderRepo.findRevenueByCategoryStats();
+    }
+
+    public List<EmployeeSalesDTO> getTopSellingEmployees(int days) {
+        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+        return orderRepo.findTopSellingEmployees(startDate);
     }
 }

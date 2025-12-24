@@ -520,7 +520,11 @@ public class BillService {
             Font boldFont = new Font(baseFont, 12, Font.BOLD, BaseColor.BLACK);
 
             // --- Tiêu đề ---
-            document.add(new Paragraph("NHÀ HÀNG TRẦN THANH SANG", titleFont));
+
+            Paragraph title = new Paragraph("COFFEE THANH XANN", titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            document.add(title);
+            document.add(new Paragraph(" "));
             document.add(new Paragraph("HÓA ĐƠN THANH TOÁN #" + dto.getId(), boldFont));
             document.add(new Paragraph(
                     "Ngày xuất: " + dto.getIssuedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
@@ -557,9 +561,21 @@ public class BillService {
             document.add(new Paragraph(" "));
 
             // --- Tổng kết ---
-            document.add(new Paragraph("Tạm tính: " + String.format("%,.0f₫", dto.getOriginalAmount()), textFont));
-            document.add(new Paragraph("Giảm giá: -" + String.format("%,.0f₫", dto.getDiscountAmount()), textFont));
-            document.add(new Paragraph("Tổng cộng: " + String.format("%,.0f₫", dto.getTotalAmount()), boldFont));
+            Paragraph subTotal = new Paragraph("Tạm tính: " +
+                    String.format("%,.0f₫", dto.getOriginalAmount()), textFont);
+            subTotal.setAlignment(Element.ALIGN_RIGHT);
+            document.add(subTotal);
+
+            Paragraph discount = new Paragraph("Giảm giá: -" +
+                    String.format("%,.0f₫", dto.getDiscountAmount()), textFont);
+            discount.setAlignment(Element.ALIGN_RIGHT);
+            document.add(discount);
+
+            Paragraph total = new Paragraph("Tổng cộng: " +
+                    String.format("%,.0f₫", dto.getTotalAmount()), boldFont);
+            total.setAlignment(Element.ALIGN_RIGHT);
+            document.add(total);
+
             document.add(new Paragraph(" "));
 
             // --- QR VietQR ---
@@ -572,8 +588,13 @@ public class BillService {
                 qrImage.scaleAbsolute(150, 150);
                 qrImage.setAlignment(Element.ALIGN_CENTER);
                 document.add(qrImage);
-                document.add(new Paragraph("Quét mã để thanh toán: " +
-                        String.format("%,.0f₫", dto.getTotalAmount()), textFont));
+
+                Paragraph qrNote = new Paragraph(
+                        "Quét mã để thanh toán: " + String.format("%,.0f₫", dto.getTotalAmount()),
+                        textFont);
+                qrNote.setAlignment(Element.ALIGN_CENTER);
+                document.add(qrNote);
+
             } catch (Exception e) {
                 document.add(new Paragraph("(Không thể tải mã QR)", textFont));
             }
@@ -605,18 +626,21 @@ public class BillService {
         newBill.setPaymentStatus(PaymentStatus.PENDING); // Bắt đầu ở PENDING
 
         Bill savedBill = billRepo.save(newBill);
+        order.setStatus(OrderStatus.PAID); // Đổi Order thành PAID
+        orderRepo.save(order); // Lưu Order đã đổi trạng thái
 
+        // 4. Đổi trạng thái Bàn thành FREE
+        TableEntity table = order.getTable();
+        if (table != null) {
+            table.setStatus(Status.FREE);
+            tableService.update(table.getId(), table); // Cập nhật Table
+        }
         BillDTO billDTO = convertToDTO(savedBill);
         Long tableId = (order.getTable() != null) ? order.getTable().getId() : null;
 
         if (paymentMethod != PaymentMethod.CASH) {
             try {
-                // ⚙️ Tạo URL thanh toán động qua VNPAY (cho cả CARD và MOBILE)
-                String vnpUrl = vnPayService.createPayment(order.getId(), order.getTotalAmount().longValue());
-                billDTO.setVnpayUrl(vnpUrl);
 
-                // 🛰️ Gửi thông tin bill (kèm link VNPAY) cho bên khách (để khách
-                // redirect/thanh toán)
                 if (tableId != null) {
                     messagingTemplate.convertAndSend("/topic/customer-bill/" + tableId, billDTO);
                     System.out.println("📤 Đã push Bill có URL VNPAY cho khách hàng bàn: " + tableId);
@@ -627,69 +651,8 @@ public class BillService {
             }
         }
 
-        // if (tableId != null) {
-        // try {
-        // OrderDTO orderDTO = orderService.convertToDTO(order);
-        // messagingTemplate.convertAndSend("/topic/order-updates/" + tableId,
-        // orderDTO);
-        // System.out.println("📤 Đã push cập nhật đơn hàng (PAID) cho bàn: " +
-        // tableId);
-        // } catch (Exception e) {
-        // System.err.println("⚠️ Gửi WebSocket order update thất bại: " +
-        // e.getMessage());
-        // }
-        // }
-
         // 5. Trả về DTO
         return convertToDTO(savedBill);
-    }
-
-    @Transactional
-    public void updatePaymentStatusByOrderId(Long orderId, PaymentStatus status) {
-        // 🔹 Tìm hóa đơn theo orderId
-        Bill bill = billRepo.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy hóa đơn cho orderId: " + orderId));
-
-        // 🔹 Kiểm tra nếu đã thanh toán thì bỏ qua
-        if (bill.getPaymentStatus() == PaymentStatus.COMPLETED) {
-            System.out.println("⚠️ Bill #" + bill.getId() + " đã thanh toán, bỏ qua callback VNPAY.");
-            return;
-        }
-
-        // Cập nhật trạng thái Bill
-        bill.setPaymentStatus(status);
-        bill.setUpdatedAt(LocalDateTime.now());
-        Bill updatedBill = billRepo.save(bill);
-
-        // ✅ NẾU THANH TOÁN THÀNH CÔNG (COMPLETED)
-        if (status == PaymentStatus.COMPLETED) {
-            Order order = updatedBill.getOrder();
-            TableEntity table = order.getTable();
-
-            // 1. Cập nhật trạng thái Order → PAID (Order đã hoàn thành thanh toán)
-            order.setStatus(OrderStatus.PAID);
-            orderRepo.save(order);
-
-            // 2. Cập nhật trạng thái Bàn → FREE (Giải phóng bàn)
-            if (table != null) {
-                table.setStatus(Status.FREE);
-                tableService.update(table.getId(), table);
-            }
-
-            // 3. ĐẨY WEBSOCKET thông báo thành công và ẩn QR/URL
-            BillDTO billDTO = convertToDTO(updatedBill);
-
-            // Gửi cho Khách hàng (để ẩn modal)
-            Long tableId = table.getId();
-            messagingTemplate.convertAndSend("/topic/customer-bill/" + tableId, billDTO);
-            System.out.println("📤 Đã push cập nhật bill PAID tới khách hàng bàn: " + tableId);
-
-            // ✅ GỬI CHO NHÂN VIÊN (ĐỂ ẨN MODAL CHỜ THANH TOÁN)
-            messagingTemplate.convertAndSend("/topic/bill-updates", billDTO);
-            System.out.println("📤 Đã push cập nhật bill PAID tới tất cả nhân viên.");
-        }
-
-        System.out.println("✅ Đã cập nhật trạng thái bill #" + bill.getId() + " qua VNPAY: " + status);
     }
 
 }

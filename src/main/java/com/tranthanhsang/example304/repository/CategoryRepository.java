@@ -12,4 +12,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     Optional<Category> findById(Long id);
 
     List<Category> findByParentCategory_Id(Long parentId);
+
+    Optional<Category> findByNameIgnoreCase(String name);
+
+    // ✅ 2. Tìm danh mục theo tên VÀ ID KHÁC (dùng cho hàm update)
+    Optional<Category> findByNameIgnoreCaseAndIdNot(String name, Long id);
 }

@@ -4,6 +4,7 @@ import com.tranthanhsang.example304.entity.Product;
 import com.tranthanhsang.example304.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -12,7 +13,10 @@ import com.tranthanhsang.example304.security.services.ProductService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 
@@ -34,22 +38,53 @@ public class ProductController {
     // Thêm sản phẩm
     @PostMapping
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public Product create(@RequestBody Product product) {
-        return productService.create(product);
+    public ResponseEntity<?> create(@RequestBody Product product) {
+        try {
+            Product createdProduct = productService.create(product);
+            return ResponseEntity.ok(createdProduct);
+        } catch (RuntimeException e) {
+            // ✅ SỬA: Bắt RuntimeException (lỗi ràng buộc: tên trùng, thiếu ảnh)
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage()); // Gửi thông báo lỗi cụ thể
+
+            // Trả về mã lỗi 409 CONFLICT (Lỗi nghiệp vụ)
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(error);
+        }
     }
 
     // Cập nhật sản phẩm
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public Product update(@PathVariable Long id, @RequestBody Product product) {
-        return productService.update(id, product);
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Product product) {
+        try {
+            Product updatedProduct = productService.update(id, product);
+            return ResponseEntity.ok(updatedProduct);
+        } catch (RuntimeException e) {
+            // ✅ SỬA: Bắt RuntimeException (lỗi ràng buộc: tên trùng)
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage());
+
+            // Trả về mã lỗi 409 CONFLICT
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(error);
+        }
     }
 
     // Xóa sản phẩm
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public void delete(@PathVariable Long id) {
-        productService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        try {
+            productService.delete(id);
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            // ✅ SỬA: Bắt RuntimeException (lỗi khóa ngoại/không tìm thấy)
+            System.err.println("❌ Lỗi xóa sản phẩm: " + e.getMessage());
+
+            // Trả về mã lỗi 409 CONFLICT (Lỗi khóa ngoại)
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
     }
 
     // Tìm kiếm sản phẩm theo từ khóa với các bộ lọc và sắp xếp

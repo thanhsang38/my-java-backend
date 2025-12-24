@@ -137,36 +137,34 @@ public class BillController {
         }
     }
 
-    @GetMapping("/vnpay-return")
-    public ResponseEntity<String> vnpayReturn(@RequestParam Map<String, String> params) {
-        System.out.println("📥 VNPAY callback nhận được: " + params);
+    // @GetMapping("/vnpay-return")
+    // public ResponseEntity<String> vnpayReturn(@RequestParam Map<String, String>
+    // params) {
+    // System.out.println("📥 VNPAY callback nhận được: " + params);
 
-        // 1. 🛡️ BƯỚC BẢO MẬT BẮT BUỘC: XÁC THỰC HASH
-        if (!vnPayService.validateHash(params)) {
-            System.err.println("❌ VNPAY callback thất bại: Hash không hợp lệ.");
-            // VNPay yêu cầu trả về mã phản hồi nếu Hash không hợp lệ
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("INVALID_SIGNATURE");
-        }
+    // if (!vnPayService.validateHash(params)) {
+    // System.err.println("❌ VNPAY callback thất bại: Hash không hợp lệ.");
+    // return
+    // ResponseEntity.status(HttpStatus.BAD_REQUEST).body("INVALID_SIGNATURE");
+    // }
 
-        try {
-            Long orderId = Long.parseLong(params.get("vnp_TxnRef"));
-            String responseCode = params.get("vnp_ResponseCode");
+    // try {
+    // Long orderId = Long.parseLong(params.get("vnp_TxnRef"));
+    // String responseCode = params.get("vnp_ResponseCode");
 
-            // 2. CẬP NHẬT TRẠNG THÁI
-            PaymentStatus status = "00".equals(responseCode)
-                    ? PaymentStatus.COMPLETED
-                    : PaymentStatus.FAILED;
+    // PaymentStatus status = "00".equals(responseCode)
+    // ? PaymentStatus.COMPLETED
+    // : PaymentStatus.FAILED;
 
-            billService.updatePaymentStatusByOrderId(orderId, status);
-            System.out.println("✅ VNPAY callback: orderId=" + orderId + ", status=" + status);
+    // billService.updatePaymentStatusByOrderId(orderId, status);
+    // System.out.println("✅ VNPAY callback: orderId=" + orderId + ", status=" +
+    // status);
 
-            // 3. Trả về OK (bắt buộc theo tài liệu VNPay)
-            return ResponseEntity.ok("OK");
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Trả về 400 nếu có lỗi xử lý nội bộ (chẳng hạn không tìm thấy Order)
-            return ResponseEntity.badRequest().body("Error processing VNPAY return");
-        }
-    }
+    // return ResponseEntity.ok("OK");
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // return ResponseEntity.badRequest().body("Error processing VNPAY return");
+    // }
+    // }
 
 }

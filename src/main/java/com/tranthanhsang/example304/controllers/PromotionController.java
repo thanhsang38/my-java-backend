@@ -21,7 +21,7 @@ import org.springframework.data.domain.Sort;
 
 @RestController
 @RequestMapping("/api/promotions")
-@PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+
 public class PromotionController {
 
     @Autowired
@@ -29,6 +29,8 @@ public class PromotionController {
 
     // ✅ Trả về danh sách Promotion
     @GetMapping
+    // Phương pháp chính xác nhất, sử dụng nhiều tham số cho hasAnyRole:
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_EMPLOYEE')")
     public ResponseEntity<Page<Promotion>> getAll(
             @PageableDefault(sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<Promotion> promotions = promotionService.getAll(pageable);
@@ -37,6 +39,7 @@ public class PromotionController {
 
     // Thêm khuyến mãi
     @PostMapping
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
     public ResponseEntity<?> create(@RequestBody Promotion promotion) {
         try {
             return ResponseEntity.ok(promotionService.create(promotion));
@@ -47,6 +50,7 @@ public class PromotionController {
 
     // Cập nhật khuyến mãi
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Promotion promotion) {
         try {
             return ResponseEntity.ok(promotionService.update(id, promotion));
@@ -57,6 +61,7 @@ public class PromotionController {
 
     // Xóa khuyến mãi
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
             promotionService.delete(id);
@@ -68,6 +73,7 @@ public class PromotionController {
 
     // Lấy khuyến mãi đang hoạt động
     @GetMapping("/active")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_EMPLOYEE')")
     public ResponseEntity<List<Promotion>> getActivePromotions() {
         return ResponseEntity.ok(promotionService.getActivePromotions());
     }

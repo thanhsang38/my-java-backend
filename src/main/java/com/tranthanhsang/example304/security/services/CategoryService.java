@@ -7,8 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.tranthanhsang.example304.repository.ProductRepository;
 
 import java.time.LocalDateTime;
+
 import java.util.List;
 
 @Service
@@ -18,6 +20,8 @@ public class CategoryService {
     private CategoryRepository categoryRepository;
     @Autowired
     private FileUploadService fileUploadService;
+    @Autowired
+    private ProductRepository productRepository;
 
     public Page<CategoryDTO> getAllCategories(Pageable pageable) {
         // 1. Gọi repository để lấy dữ liệu dạng Page<Category>
@@ -35,13 +39,30 @@ public class CategoryService {
 
     // Tạo mới danh mục
     public Category create(Category category) {
+        if (category.getName() == null || category.getName().trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Tên danh mục không được để trống.");
+        }
+        categoryRepository.findByNameIgnoreCase(category.getName())
+                .ifPresent(c -> {
+                    throw new RuntimeException("❌ Lỗi: Tên danh mục '" + category.getName() + "' đã tồn tại.");
+                });
+        category.setName(category.getName().trim());
+        category.setCreatedAt(LocalDateTime.now());
+        category.setUpdatedAt(LocalDateTime.now());
         return categoryRepository.save(category);
     }
 
     // Cập nhật danh mục
     public Category update(Long id, Category category) {
         Category existing = categoryRepository.findById(id).orElseThrow();
-
+        if (category.getName() == null || category.getName().trim().isEmpty()) {
+            throw new RuntimeException("❌ Lỗi: Tên danh mục không được để trống.");
+        }
+        categoryRepository.findByNameIgnoreCaseAndIdNot(category.getName(), id)
+                .ifPresent(c -> {
+                    throw new RuntimeException(
+                            "❌ Lỗi: Tên danh mục '" + category.getName() + "' đã được sử dụng bởi danh mục khác.");
+                });
         String newImageUrl = category.getImageUrl();
         String oldImageUrl = existing.getImageUrl();
 
@@ -49,7 +70,7 @@ public class CategoryService {
         if (newImageUrl != null && oldImageUrl != null && !newImageUrl.equals(oldImageUrl)) {
             fileUploadService.deleteImage(oldImageUrl);
         }
-        existing.setName(category.getName());
+        existing.setName(category.getName().trim());
         existing.setDescription(category.getDescription());
         existing.setImageUrl(category.getImageUrl());
 
@@ -70,7 +91,9 @@ public class CategoryService {
     public void delete(Long id) {
         Category existing = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục có id: " + id));
-
+        if (productRepository.existsByCategoryId(id)) {
+            throw new RuntimeException("❌ Lỗi: Không thể xóa danh mục này. Vẫn còn sản phẩm đang sử dụng danh mục.");
+        }
         // === THÊM LOGIC XÓA ẢNH ===
         if (existing.getImageUrl() != null && !existing.getImageUrl().isBlank()) {
             fileUploadService.deleteImage(existing.getImageUrl());

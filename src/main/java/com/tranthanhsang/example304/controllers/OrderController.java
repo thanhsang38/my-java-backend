@@ -8,10 +8,14 @@ import org.springframework.web.bind.annotation.*;
 import com.tranthanhsang.example304.security.services.OrderService;
 import com.tranthanhsang.example304.entity.Order;
 import com.tranthanhsang.example304.entity.enums.OrderStatus;
+import com.tranthanhsang.example304.payload.response.EmployeeSalesDTO;
 import com.tranthanhsang.example304.payload.response.OrderDTO;
+import com.tranthanhsang.example304.payload.response.ProductSalesDTO;
+import com.tranthanhsang.example304.payload.response.RevenueCountDTO;
 
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -129,5 +133,42 @@ public class OrderController {
 
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @GetMapping("/stats/top-selling")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+    public ResponseEntity<List<ProductSalesDTO>> getTopSellingStats(
+            // Tham số limit (mặc định 10) để giới hạn số lượng sản phẩm
+            @RequestParam(defaultValue = "10") int limit) {
+
+        List<ProductSalesDTO> stats = orderService.getTopSellingProducts(limit);
+        return ResponseEntity.ok(stats);
+    }
+
+    @GetMapping("/stats/daily-revenue")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+    public ResponseEntity<List<RevenueCountDTO>> getDailyRevenueStats(
+            // Tham số days (mặc định 7) để giới hạn số ngày thống kê
+            @RequestParam(defaultValue = "7") int days) {
+
+        List<RevenueCountDTO> stats = orderService.getDailyRevenueAndOrderCount(days);
+        return ResponseEntity.ok(stats);
+    }
+
+    @GetMapping("/stats/revenue-by-category")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')")
+    public ResponseEntity<List<ProductSalesDTO>> getRevenueByCategoryStats() {
+
+        List<ProductSalesDTO> stats = orderService.getRevenueByCategoryStats();
+        return ResponseEntity.ok(stats);
+    }
+
+    @GetMapping("/stats/top-employees")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN')") // Quyền Admin
+    public ResponseEntity<List<EmployeeSalesDTO>> getTopSellingEmployeesStats(
+            @RequestParam(defaultValue = "7") int days) {
+
+        List<EmployeeSalesDTO> stats = orderService.getTopSellingEmployees(days);
+        return ResponseEntity.ok(stats);
     }
 }
